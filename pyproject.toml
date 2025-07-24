@@ -5,7 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "beaverfe>=0.2.1",
+    "numpy>=2.3.1",
     "pandas>=2.3.1",
+    "scikit-learn>=1.7.1",
+    "xgboost>=3.0.2",
 ]
 
 [dependency-groups]
@@ -17,3 +21,10 @@ dev = [
 commits = [
     "pre-commit>=4.2.0",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
