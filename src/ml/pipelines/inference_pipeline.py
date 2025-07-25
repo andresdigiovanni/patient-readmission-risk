@@ -13,6 +13,7 @@ class InferencePipeline:
         self.artifact_name = artifact_name
         self.model = None
         self.preprocessor = None
+        self.selected_features = None
 
     def load_model_from_wandb(self, project="patient-readmission-risk"):
         wandb.login()
@@ -23,12 +24,16 @@ class InferencePipeline:
 
         model_path = os.path.join(artifact_dir, "logistic_model.pkl")
         preprocessor_path = os.path.join(artifact_dir, "preprocessor.pkl")
+        selected_features_path = os.path.join(artifact_dir, "selected_features.txt")
 
         with open(model_path, "rb") as f:
             self.model = pickle.load(f)
 
         with open(preprocessor_path, "rb") as f:
             self.preprocessor = pickle.load(f)
+
+        with open(selected_features_path, "r") as f:
+            self.selected_features = [line.strip() for line in f.readlines()]
 
         run.finish()
 
@@ -52,4 +57,8 @@ class InferencePipeline:
         df = clean_data(df)
         df = feature_engineering(df)
 
-        return self.preprocessor.transform(df)
+        df_transformed = self.preprocessor.transform(df)
+        feature_names = self.preprocessor.get_feature_names_out()
+        df = pd.DataFrame(df_transformed, columns=feature_names, index=df.index)
+
+        return df[self.selected_features]

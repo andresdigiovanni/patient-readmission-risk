@@ -3,6 +3,7 @@ import pickle
 from pathlib import Path
 
 import pandas as pd
+from sklearn.feature_selection import RFECV
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 
@@ -26,6 +27,9 @@ class TrainingPipeline:
 
         PREPROCESSOR_FILE_NAME = "preprocessor.pkl"
         PREPROCESSOR_PATH = Path(MODELS_FOLDER, PREPROCESSOR_FILE_NAME)
+
+        SELECTED_FEATURES_FILE_NAME = "selected_features.txt"
+        SELECTED_FEATURES_PATH = Path(MODELS_FOLDER, SELECTED_FEATURES_FILE_NAME)
 
         RAW_DATA_PATH = Path("data", "raw", "diabetic_data.csv")
 
@@ -64,8 +68,31 @@ class TrainingPipeline:
 
         # Preprocess data
         preprocessor = build_preprocess_pipeline(X_train)
-        X_train = preprocessor.fit_transform(X_train)
-        X_val = preprocessor.transform(X_val)
+        X_train_transformed = preprocessor.fit_transform(X_train)
+        X_val_transformed = preprocessor.transform(X_val)
+
+        feature_names = preprocessor.get_feature_names_out()
+        X_train = pd.DataFrame(
+            X_train_transformed, columns=feature_names, index=X_train.index
+        )
+        X_val = pd.DataFrame(
+            X_val_transformed, columns=feature_names, index=X_val.index
+        )
+
+        # Feature selection
+        model = LogisticRegression(max_iter=1000, random_state=42)
+        rfecv = RFECV(
+            estimator=model,
+            step=0.1,
+            cv=5,
+            scoring="roc_auc",
+            n_jobs=-1,
+        )
+        rfecv.fit(X_train, y_train)
+        selected_features = list(rfecv.get_feature_names_out())
+
+        X_train = X_train[selected_features]
+        X_val = X_val[selected_features]
 
         # Hyper parameter tunning
         tuner = LogisticRegressionTuner(X_train, y_train)
@@ -83,16 +110,21 @@ class TrainingPipeline:
 
         # Track in wandb
 
-        ### Model & Preprocessor
+        ### Model / Preprocessor / Selected Features
         with open(MODEL_PATH, "wb") as f:
             pickle.dump(model, f)
 
         with open(PREPROCESSOR_PATH, "wb") as f:
             pickle.dump(preprocessor, f)
 
+        with open(SELECTED_FEATURES_PATH, "w") as f:
+            for feat in selected_features:
+                f.write(f"{feat}\n")
+
         artifact = wandb.Artifact("logistic_regression_model", type="model")
         artifact.add_file(MODEL_PATH)
         artifact.add_file(PREPROCESSOR_PATH)
+        artifact.add_file(SELECTED_FEATURES_PATH)
         run.log_artifact(artifact)
 
         ### Metrics and plots
