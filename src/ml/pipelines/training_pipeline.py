@@ -3,10 +3,10 @@ import pickle
 from pathlib import Path
 
 import pandas as pd
-import wandb
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 
+import wandb
 from src.data import clean_data, normalize_column_names
 from src.features import feature_engineering
 from src.ml.evaluation.metrics import compute_metrics
@@ -19,16 +19,18 @@ class TrainingPipeline:
     def run(self):
         # Set up paths
         MODELS_FOLDER = "models"
+        os.makedirs(MODELS_FOLDER, exist_ok=True)
+
         MODEL_FILE_NAME = "logistic_model.pkl"
         MODEL_PATH = Path(MODELS_FOLDER, MODEL_FILE_NAME)
 
-        RAW_DATA_PATH = Path("data", "raw", "diabetic_data.csv")
+        PREPROCESSOR_FILE_NAME = "preprocessor.pkl"
+        PREPROCESSOR_PATH = Path(MODELS_FOLDER, PREPROCESSOR_FILE_NAME)
 
-        os.makedirs(MODELS_FOLDER, exist_ok=True)
+        RAW_DATA_PATH = Path("data", "raw", "diabetic_data.csv")
 
         # Start tracking
         wandb.login()
-
         run = wandb.init(
             project="patient-readmission-risk",
             name="training_pipeline_run",
@@ -37,6 +39,12 @@ class TrainingPipeline:
         # Load data
         df = pd.read_csv(RAW_DATA_PATH)
         df = normalize_column_names(df)
+
+        # Map target
+        df["readmitted_30_days"] = df["readmitted"].apply(
+            lambda x: 1 if x == "<30" else 0
+        )
+        df.drop(columns=["readmitted"], inplace=True)
 
         # Data cleaning and preprocessing
         df = clean_data(df)
@@ -75,12 +83,16 @@ class TrainingPipeline:
 
         # Track in wandb
 
-        ### Model
+        ### Model & Preprocessor
         with open(MODEL_PATH, "wb") as f:
             pickle.dump(model, f)
 
+        with open(PREPROCESSOR_PATH, "wb") as f:
+            pickle.dump(preprocessor, f)
+
         artifact = wandb.Artifact("logistic_regression_model", type="model")
         artifact.add_file(MODEL_PATH)
+        artifact.add_file(PREPROCESSOR_PATH)
         run.log_artifact(artifact)
 
         ### Metrics and plots

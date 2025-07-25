@@ -11,3 +11,8 @@ wheels/
 
 # Environment variables
 .env
+
+# wandb files
+artifacts/
+models/
+wandb/

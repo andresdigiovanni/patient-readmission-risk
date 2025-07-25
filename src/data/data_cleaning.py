@@ -11,8 +11,4 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     # Drop useless columns
     df.drop(["encounter_id", "patient_nbr"], axis=1, inplace=True)
 
-    # Map target
-    df["readmitted_30_days"] = df["readmitted"].apply(lambda x: 1 if x == "<30" else 0)
-    df.drop(columns=["readmitted"], inplace=True)
-
     return df
