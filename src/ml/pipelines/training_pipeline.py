@@ -1,0 +1,99 @@
+import os
+import pickle
+from pathlib import Path
+
+import pandas as pd
+import wandb
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+
+from src.data import clean_data, normalize_column_names
+from src.features import feature_engineering
+from src.ml.evaluation.metrics import compute_metrics
+from src.ml.pipelines import build_preprocess_pipeline
+from src.ml.tuning import LogisticRegressionTuner
+from src.preprocessing import balance_dataset
+
+
+class TrainingPipeline:
+    def run(self):
+        # Set up paths
+        MODELS_FOLDER = "models"
+        MODEL_FILE_NAME = "logistic_model.pkl"
+        MODEL_PATH = Path(MODELS_FOLDER, MODEL_FILE_NAME)
+
+        RAW_DATA_PATH = Path("data", "raw", "diabetic_data.csv")
+
+        os.makedirs(MODELS_FOLDER, exist_ok=True)
+
+        # Start tracking
+        wandb.login()
+
+        run = wandb.init(
+            project="patient-readmission-risk",
+            name="training_pipeline_run",
+        )
+
+        # Load data
+        df = pd.read_csv(RAW_DATA_PATH)
+        df = normalize_column_names(df)
+
+        # Data cleaning and preprocessing
+        df = clean_data(df)
+        df = feature_engineering(df)
+
+        target_column = "readmitted_30_days"
+        X = df.drop(target_column, axis=1)
+        y = df[target_column]
+
+        # Balance dataset
+        X, y = balance_dataset(X, y, strategy="undersample")
+
+        # Split data into training and test sets
+        X_train, X_val, y_train, y_val = train_test_split(
+            X, y, stratify=y, test_size=0.2, random_state=42
+        )
+
+        # Preprocess data
+        preprocessor = build_preprocess_pipeline(X_train)
+        X_train = preprocessor.fit_transform(X_train)
+        X_val = preprocessor.transform(X_val)
+
+        # Hyper parameter tunning
+        tuner = LogisticRegressionTuner(X_train, y_train)
+        best_params = tuner.run()
+
+        # Train model
+        model = LogisticRegression(max_iter=1_000, **best_params)
+        model.fit(X_train, y_train)
+
+        # Evaluate
+        y_pred = model.predict(X_val)
+        y_prob = model.predict_proba(X_val)
+
+        metrics = compute_metrics(y_val, y_pred, y_prob)
+
+        # Track in wandb
+
+        ### Model
+        with open(MODEL_PATH, "wb") as f:
+            pickle.dump(model, f)
+
+        artifact = wandb.Artifact("logistic_regression_model", type="model")
+        artifact.add_file(MODEL_PATH)
+        run.log_artifact(artifact)
+
+        ### Metrics and plots
+        run.log(metrics)
+        run.log({"roc": wandb.plot.roc_curve(y_val, y_prob)})
+        run.log({"pr": wandb.plot.pr_curve(y_val, y_prob)})
+        run.log(
+            {
+                "conf_mat": wandb.plot.confusion_matrix(
+                    y_true=y_val.tolist(),
+                    preds=y_pred.tolist(),
+                )
+            }
+        )
+
+        run.finish()
