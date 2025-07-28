@@ -31,14 +31,10 @@ class TrainingPipeline:
         SELECTED_FEATURES_FILE_NAME = "selected_features.txt"
         SELECTED_FEATURES_PATH = Path(MODELS_FOLDER, SELECTED_FEATURES_FILE_NAME)
 
-        RAW_DATA_PATH = Path("data", "raw", "diabetic_data.csv")
+        TRAIN_REFERENCE_FILE_NAME = "train_reference.csv"
+        TRAIN_REFERENCE_PATH = Path(MODELS_FOLDER, TRAIN_REFERENCE_FILE_NAME)
 
-        # Start tracking
-        wandb.login()
-        run = wandb.init(
-            project="patient-readmission-risk",
-            name="training_pipeline_run",
-        )
+        RAW_DATA_PATH = Path("data", "raw", "diabetic_data.csv")
 
         # Load data
         df = pd.read_csv(RAW_DATA_PATH)
@@ -109,22 +105,40 @@ class TrainingPipeline:
         metrics = compute_metrics(y_val, y_pred, y_prob)
 
         # Track in wandb
+        wandb.login()
+        run = wandb.init(
+            project="patient-readmission-risk", name="training_pipeline_run"
+        )
+        artifact = wandb.Artifact("logistic_regression_model", type="model")
 
-        ### Model / Preprocessor / Selected Features
+        ### Model
         with open(MODEL_PATH, "wb") as f:
             pickle.dump(model, f)
+        artifact.add_file(MODEL_PATH)
 
+        ### Preprocessor
         with open(PREPROCESSOR_PATH, "wb") as f:
             pickle.dump(preprocessor, f)
+        artifact.add_file(PREPROCESSOR_PATH)
 
+        ### Selected Features
         with open(SELECTED_FEATURES_PATH, "w") as f:
             for feat in selected_features:
                 f.write(f"{feat}\n")
-
-        artifact = wandb.Artifact("logistic_regression_model", type="model")
-        artifact.add_file(MODEL_PATH)
-        artifact.add_file(PREPROCESSOR_PATH)
         artifact.add_file(SELECTED_FEATURES_PATH)
+
+        ### Training data
+        y_pred_train = model.predict(X_train)
+        y_prob_train = model.predict_proba(X_train)
+
+        df_train = X_train.copy()
+        df_train["target"] = y_train
+        df_train["pred"] = y_pred_train
+        df_train["proba"] = y_prob_train[:, 1]
+
+        df_train.to_csv(TRAIN_REFERENCE_PATH, index=False)
+        artifact.add_file(TRAIN_REFERENCE_PATH)
+
         run.log_artifact(artifact)
 
         ### Metrics and plots

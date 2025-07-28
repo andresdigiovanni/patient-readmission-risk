@@ -13,11 +13,9 @@ def main():
     raw_data = raw_data.drop(target_column, axis=1)
     raw_data = raw_data[:5]
 
-    # Initialize and run inference
+    # Inference
     inference = InferencePipeline()
-    inference.load_model_from_wandb()
-
-    preds, probs = inference.run(raw_data)
+    preds, probs = inference.predict(raw_data)
 
     print("Predictions:", preds)
     print("Probabilities:", probs)
