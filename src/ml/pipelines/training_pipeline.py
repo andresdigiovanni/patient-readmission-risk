@@ -2,7 +2,9 @@ import os
 import pickle
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.feature_selection import RFECV
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
@@ -91,11 +93,15 @@ class TrainingPipeline:
         X_val = X_val[selected_features]
 
         # Hyper parameter tunning
-        tuner = LogisticRegressionTuner(X_train, y_train)
+        tuner = LogisticRegressionTuner(X_train, y_train, n_trials=5)
         best_params = tuner.run()
 
         # Train model
         model = LogisticRegression(max_iter=1_000, **best_params)
+        model.fit(X_train, y_train)
+
+        # Calibrate model
+        model = CalibratedClassifierCV(model, cv=5, method="sigmoid")
         model.fit(X_train, y_train)
 
         # Evaluate
@@ -150,6 +156,13 @@ class TrainingPipeline:
                 "conf_mat": wandb.plot.confusion_matrix(
                     y_true=y_val.tolist(),
                     preds=y_pred.tolist(),
+                )
+            }
+        )
+        run.log(
+            {
+                "calibration_curve": wandb.sklearn.plot_calibration_curve(
+                    model, X_train, y_train, "LogisticRegression"
                 )
             }
         )
