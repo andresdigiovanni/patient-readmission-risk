@@ -8,11 +8,12 @@ dependencies = [
     "beaverfe>=0.2.1",
     "evidently>=0.7.11",
     "fastapi>=0.116.1",
-    "numpy>=2.3.1",
+    "numpy==2.2.6",
     "optuna>=4.4.0",
     "pandas>=2.3.1",
     "python-dotenv>=1.1.1",
     "scikit-learn>=1.7.1",
+    "shap>=0.48.0",
     "wandb>=0.21.0",
     "xgboost>=3.0.2",
 ]
@@ -36,3 +37,9 @@ packages = ["src"]
 
 [tool.ruff]
 ignore = ["F401"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true

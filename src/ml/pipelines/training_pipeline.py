@@ -4,6 +4,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import shap
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.feature_selection import RFECV
 from sklearn.linear_model import LogisticRegression
@@ -13,6 +14,7 @@ import wandb
 from src.data import clean_data, normalize_column_names
 from src.features import feature_engineering
 from src.ml.evaluation.metrics import compute_metrics
+from src.ml.explainer import SHAPExplainer
 from src.ml.pipelines import build_preprocess_pipeline
 from src.ml.tuning import LogisticRegressionTuner
 from src.preprocessing import balance_dataset
@@ -37,6 +39,11 @@ class TrainingPipeline:
         TRAIN_REFERENCE_PATH = Path(MODELS_FOLDER, TRAIN_REFERENCE_FILE_NAME)
 
         RAW_DATA_PATH = Path("data", "raw", "diabetic_data.csv")
+
+        wandb.login()
+        run = wandb.init(
+            project="patient-readmission-risk", name="training_pipeline_run"
+        )
 
         # Load data
         df = pd.read_csv(RAW_DATA_PATH)
@@ -100,6 +107,10 @@ class TrainingPipeline:
         model = LogisticRegression(max_iter=1_000, **best_params)
         model.fit(X_train, y_train)
 
+        # Explainer
+        explainer = SHAPExplainer(model=model)
+        explainer.explain(X_train, run=run)
+
         # Calibrate model
         model = CalibratedClassifierCV(model, cv=5, method="sigmoid")
         model.fit(X_train, y_train)
@@ -111,10 +122,6 @@ class TrainingPipeline:
         metrics = compute_metrics(y_val, y_pred, y_prob)
 
         # Track in wandb
-        wandb.login()
-        run = wandb.init(
-            project="patient-readmission-risk", name="training_pipeline_run"
-        )
         artifact = wandb.Artifact("logistic_regression_model", type="model")
 
         ### Model
