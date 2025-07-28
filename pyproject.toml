@@ -1,7 +1,7 @@
 [project]
 name = "patient-readmission-risk"
 version = "0.1.0"
-description = "Add your description here"
+description = "Predict 30-day patient readmission risk"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -33,3 +33,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+
+[tool.ruff]
+ignore = ["F401"]
